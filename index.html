@@ -1,1 +1,361 @@
 <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J12ハッカソン作品</title>
+    <style>
+        #gameCanvas {
+            width: 1000px;
+            height: 400px;
+            border: 1px solid black;
+            background-color: #f0f0f0;
+            position: relative;
+            overflow: hidden;
+            display: none;
+            /* ゲームが始まる前は非表示にする */
+        }
+
+        #player {
+            width: 50px;
+            height: 50px;
+            background-color: red;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+        }
+
+        .item {
+            width: 20px;
+            height: 20px;
+            background-color: blue;
+            position: absolute;
+        }
+
+        .instructions {
+            width: 200px;
+            height: 400px;
+            background-color: #cccccc;
+            display: block;
+            float: right;
+            padding: 20px;
+            font-size: 92%;
+        }
+
+        .start-screen,
+        .score-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        #timer {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+        }
+
+        #score-2 {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 20px;
+        }
+
+        #time-up-message {
+            font-size: 40px;
+            color: red;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="start-screen">
+        <h1>1分間スコア稼ぐゲーム</h1>
+        <button id="start-button">スタート</button>
+    </div>
+
+    <div class="instructions">
+        <h2>操作説明</h2>
+        <ul>
+            <li>Aキー: 左に移動</li>
+            <li>Dキー: 右に移動</li>
+            <li>スペースキー: ジャンプ</li>
+        </ul>
+
+        <br>
+
+        <h2>ゲーム説明</h2>
+        <ul>
+            <p>降ってくるモノを取ってスコアを稼いでください</p>
+            <li><span style="color: red;">赤色</span>: プレイヤー</li>
+            <li><span style="color: blue;">青色</span>: 1pt</li>
+            <li><span style="color: lightblue;  text-shadow: 0 0 1px black;">水色</span>: 2pt</li>
+        </ul>
+    </div>
+
+    <div id="gameCanvas">
+        <div id="player"></div>
+    </div>
+    <div id="score-2">スコア: <span id="score">0</span></div>
+    <div id="timer">残り時間: <span id="time-left"></span></div>
+    <div id="time-up-message">TIME UP!!</div>
+    <div class="score-screen" style="display: none;">
+        <h1>スコア画面</h1>
+        <button id="restart-button">スタート画面に戻る</button>
+    </div>
+
+    <script>
+        const player = document.getElementById('player');
+        const gameCanvas = document.getElementById('gameCanvas');
+        const startScreen = document.querySelector('.start-screen');
+        const scoreScreen = document.querySelector('.score-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const timerElement = document.getElementById('time-left');
+        const timeUpMessage = document.getElementById('time-up-message');
+        const scoreDisplay = document.getElementById('score');
+        let playerBottom = 0;
+        let playerLeft = 0;
+        const gravity = 2.5;
+        let playerFallSpeed = 5;
+        let isJumping = false;
+        let canJump = true;
+        const jumpHeight = 200;
+        const jumpStep = 5;
+        let jumpCount = 0;
+        let isMovingLeft = false;
+        let isMovingRight = false;
+        let gameover = false;
+        let score = 0;
+        let timer;
+
+        function startGame() {
+            startScreen.style.display = 'none';
+            gameCanvas.style.display = 'block';
+            score = 0;
+            startTimer();
+            startGameLoop(); // ゲームの進行を開始する
+        }
+
+        function endGame() {
+            clearInterval(timer);
+            gameover = true;
+            scoreScreen.style.display = 'block';
+            gameCanvas.style.display = 'none';
+        }
+
+        function startTimer() {
+            let timeLeft = 60; // 全体の時間を1:00に変更
+            timer = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    timeUpMessage.style.display = 'block';
+                    setTimeout(endGame, 2000); // 2秒後にendGameを実行
+                } else if (timeLeft <= 30) { // 残り30秒以下の場合
+
+                    setTimeout(function () {
+                        createItem(true);
+                        createItem(false);
+                    }, 1000);
+
+                    setTimeout(function () {
+                        createItem(true);
+                        createItem(true);
+                        createItem(false);
+                    }, 1500);
+
+                    setTimeout(function () {
+                        createItem(true);
+                        createItem(false);
+                    }, 2000);
+
+                    setTimeout(function () {
+                        createItem(true);
+                        createItem(true);
+                        createItem(false);
+                    }, 2500);
+
+                    setTimeout(function () {
+                        createItem(true);
+                        createItem(false);
+                    }, 3000);
+
+                } else {
+
+                    setTimeout(function () {
+                        createItem(false);
+                    }, 1000);
+
+                    setTimeout(function () {
+                        createItem(false);
+                    }, 1500);
+
+                    setTimeout(function () {
+                        createItem(false);
+                    }, 2000);
+
+                    setTimeout(function () {
+                        createItem(false);
+                    }, 2500);
+                }
+                updateTimerDisplay(timeLeft);
+            }, 1000);
+        }
+
+
+        function updateTimerDisplay(timeLeft) {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timerElement.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+
+        function jump() {
+            if (canJump && !isJumping) {
+                isJumping = true;
+                canJump = false;
+                jumpCount = 0;
+            }
+        }
+
+        function moveLeft() {
+            isMovingLeft = true;
+        }
+
+        function moveRight() {
+            isMovingRight = true;
+        }
+
+        function stopMoveLeft() {
+            isMovingLeft = false;
+        }
+
+        function stopMoveRight() {
+            isMovingRight = false;
+        }
+
+        function checkCollision(playerRect, itemRect) {
+            return playerRect.left < itemRect.right &&
+                playerRect.right > itemRect.left &&
+                playerRect.top < itemRect.bottom &&
+                playerRect.bottom > itemRect.top;
+        }
+
+        function createItem(isHighSpeed) {
+            if (!gameover) {
+                const item = document.createElement('div');
+                item.classList.add('item');
+                item.style.left = Math.random() * 980 + 'px';
+                item.style.top = '0px';
+                gameCanvas.appendChild(item);
+
+                let itemRect = item.getBoundingClientRect();
+                let fallSpeed;
+
+                if (isHighSpeed) {
+                    fallSpeed = (Math.random() * 7 + 5) * 2; // 落下速度を2倍に
+                } else {
+                    fallSpeed = Math.random() * 7 + 3; // 通常の落下速度
+                }
+
+                if (fallSpeed > 8) {
+                    item.style.backgroundColor = 'lightblue'; // 落下速度が10より大きい場合は水色に
+                }
+
+                const itemInterval = setInterval(function () {
+                    let itemTop = parseInt(item.style.top);
+                    itemTop += gravity * fallSpeed / playerFallSpeed; // 落下速度を調整
+                    item.style.top = itemTop + 'px';
+                    itemRect = item.getBoundingClientRect();
+
+                    if (itemTop > 380) {
+                        clearInterval(itemInterval);
+                        item.remove();
+                    }
+
+                    const playerRect = player.getBoundingClientRect();
+
+                    if (checkCollision(playerRect, itemRect)) {
+                        clearInterval(itemInterval);
+                        item.remove();
+                        score += (fallSpeed > 8) ? 2 : 1; // スコアを更新（落下速度が5より大きい場合は2倍）
+                        scoreDisplay.textContent = score; // スコアを画面に表示
+                    }
+                }, 15);
+            }
+        }
+
+
+        function startGameLoop() {
+            setInterval(function () {
+                if (isJumping) {
+                    if (jumpCount < jumpStep) {
+                        playerBottom += jumpHeight / jumpStep;
+                        jumpCount++;
+                    } else {
+                        isJumping = false;
+                    }
+                } else {
+                    playerBottom -= playerFallSpeed;
+                    if (playerBottom < 0) {
+                        playerBottom = 0;
+                        canJump = true;
+                    }
+                }
+
+                if (isMovingLeft && playerLeft > 0) {
+                    playerLeft -= 10;
+                }
+
+                if (isMovingRight && playerLeft < 950) {
+                    playerLeft += 10;
+                }
+
+                player.style.bottom = playerBottom + 'px';
+                player.style.left = playerLeft + 'px';
+            }, 20);
+
+            setInterval(Math.random() * 200 + 100);
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.code === 'Space') {
+                jump();
+            } else if (event.code === 'KeyA') {
+                moveLeft();
+            } else if (event.code === 'KeyD') {
+                moveRight();
+            }
+        });
+
+        document.addEventListener('keyup', function (event) {
+            if (event.code === 'KeyA') {
+                stopMoveLeft();
+            } else if (event.code === 'KeyD') {
+                stopMoveRight();
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', function () {
+            startScreen.style.display = 'block';
+            scoreScreen.style.display = 'none';
+            timeUpMessage.style.display = 'none';
+        });
+
+        restartButton.addEventListener('click', function () {
+            location.reload(); // ページのリロード
+        });
+
+    </script>
+</body>
+
+</html>
